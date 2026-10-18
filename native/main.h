@@ -8,6 +8,8 @@ extern "C" {
 
 JNIEXPORT jobject JNICALL Java_dev_redstones_mediaplayerinfo_impl_win_WindowsMediaPlayerInfo_getMediaSessions(JNIEnv* env, jobject obj);
 
+JNIEXPORT jlong JNICALL Java_dev_redstones_mediaplayerinfo_impl_win_WindowsMediaSession_getLiveState(JNIEnv* env, jobject obj);
+
 JNIEXPORT void JNICALL Java_dev_redstones_mediaplayerinfo_impl_win_WindowsMediaSession_play(JNIEnv* env, jobject obj);
 JNIEXPORT void JNICALL Java_dev_redstones_mediaplayerinfo_impl_win_WindowsMediaSession_pause(JNIEnv* env, jobject obj);
 JNIEXPORT void JNICALL Java_dev_redstones_mediaplayerinfo_impl_win_WindowsMediaSession_playPause(JNIEnv* env, jobject obj);

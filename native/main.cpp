@@ -1,6 +1,7 @@
 #include "main.h"
 
 #include <iostream>
+#include <string>
 #include <vector>
 #include <fstream>
 #include <winrt/Windows.Foundation.Collections.h>
@@ -77,6 +78,71 @@ jobject Java_dev_redstones_mediaplayerinfo_impl_win_WindowsMediaPlayerInfo_getMe
     }
 
     return list;
+}
+
+static bool owns(GlobalSystemMediaTransportControlsSession const& session, JNIEnv* env, jstring jOwner) {
+    const jchar* chars = env->GetStringChars(jOwner, nullptr);
+    jsize length = env->GetStringLength(jOwner);
+    std::wstring expected(reinterpret_cast<const wchar_t*>(chars), static_cast<size_t>(length));
+    env->ReleaseStringChars(jOwner, chars);
+    return std::wstring(session.SourceAppUserModelId().c_str()) == expected;
+}
+
+// The manager is a process-wide singleton, and activating it per read is most of what a read
+// would otherwise cost - asked for dozens of times a second, that dominates. The one the live
+// thread acquired first is kept; the sessions themselves are enumerated fresh on every read.
+//
+// Deliberately leaked through a holder struct: releasing the manager from a static destructor
+// while the JVM tears down and unloads the library deadlocks the exit, and the process is about
+// to end anyway.
+struct LiveManagerHolder {
+    GlobalSystemMediaTransportControlsSessionManager manager;
+};
+
+static GlobalSystemMediaTransportControlsSessionManager liveSessionManager() {
+    static LiveManagerHolder* live = new LiveManagerHolder{GlobalSystemMediaTransportControlsSessionManager::RequestAsync().get()};
+    return live->manager;
+}
+
+jlong Java_dev_redstones_mediaplayerinfo_impl_win_WindowsMediaSession_getLiveState(JNIEnv* env, jobject obj) {
+    jfieldID indexField = env->GetFieldID(env->GetObjectClass(obj), "index", "I");
+    jint index = env->GetIntField(obj, indexField);
+    jfieldID ownerField = env->GetFieldID(env->GetObjectClass(obj), "owner", "Ljava/lang/String;");
+    auto jOwner = static_cast<jstring>(env->GetObjectField(obj, ownerField));
+
+    auto sessions = liveSessionManager().GetSessions();
+
+    // The index is the slot this session had when the list was read, and slots move as apps come
+    // and go: the session is looked up by its owner when the slot no longer holds it.
+    GlobalSystemMediaTransportControlsSession session = nullptr;
+    if (index >= 0 && index < static_cast<jint>(sessions.Size()) && owns(sessions.GetAt(index), env, jOwner)) {
+        session = sessions.GetAt(index);
+    }
+    if (!session) {
+        for (uint32_t i = 0; i < sessions.Size(); ++i) {
+            auto candidate = sessions.GetAt(i);
+            if (owns(candidate, env, jOwner)) {
+                session = candidate;
+                break;
+            }
+        }
+    }
+    if (!session) {
+        return -1;
+    }
+
+    auto timeline = session.GetTimelineProperties();
+    bool playing = session.GetPlaybackInfo().PlaybackStatus() == GlobalSystemMediaTransportControlsSessionPlaybackStatus::Playing;
+    long long position;
+    if (playing) {
+        position = std::chrono::duration_cast<std::chrono::milliseconds>(winrt::clock::now() - timeline.LastUpdatedTime() + timeline.Position()).count();
+    } else {
+        position = std::chrono::duration_cast<std::chrono::milliseconds>(timeline.Position()).count();
+    }
+    if (position < 0) {
+        position = 0;
+    }
+    return (position << 1) | (playing ? 1 : 0);
 }
 
 void Java_dev_redstones_mediaplayerinfo_impl_win_WindowsMediaSession_play(JNIEnv* env, jobject obj) {
