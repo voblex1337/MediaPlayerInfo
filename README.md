@@ -1,5 +1,9 @@
 # MediaPlayerInfo
 
+> This is my fork of [Redstonecrafter0/MediaPlayerInfo](https://github.com/Redstonecrafter0/MediaPlayerInfo), maintained by [voblex1337](https://github.com/voblex1337).
+> On top of the upstream library it adds `WindowsMediaSession.getLiveState()` — a cheap, on-demand read of the session's timeline position and playback status.
+> Releases are built by GitHub Actions.
+
 MediaPlayerInfo is a Kotlin wrapper around platform-specific APIs designed to read the currently playing media.
 
 The original idea came from [this PoC](https://github.com/Redstonecrafter0/WindowsReadMediaInfo).
