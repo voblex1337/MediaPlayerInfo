@@ -3,7 +3,7 @@ project(MediaPlayerInfo)
 
 find_package(JNI)
 
-set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_STANDARD 20)
 
 include_directories(${JNI_INCLUDE_DIRS})
 

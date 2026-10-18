@@ -51,12 +51,22 @@ jobject Java_dev_redstones_mediaplayerinfo_impl_win_WindowsMediaPlayerInfo_getMe
         jstring jArtist = env->NewStringUTF(to_string(mediaProperties.Artist()).c_str());
         jlong jPosition;
         jboolean jPlaying = session.GetPlaybackInfo().PlaybackStatus() == GlobalSystemMediaTransportControlsSessionPlaybackStatus::Playing;
+        // The timeline publishes its position with 100ns resolution. Keep the full precision in
+        // milliseconds instead of flooring to whole seconds, and while playing walk the last
+        // pushed position forward from the instant it was pushed: reports only arrive about once
+        // a second, and a second-quantised clock would otherwise stand still between pushes.
         if (jPlaying) {
-            jPosition = std::chrono::duration_cast<std::chrono::seconds>(winrt::clock::now() - timeline.LastUpdatedTime() + timeline.Position()).count();
+            jPosition = std::chrono::duration_cast<std::chrono::milliseconds>(winrt::clock::now() - timeline.LastUpdatedTime() + timeline.Position()).count();
         } else {
-            jPosition = std::chrono::duration_cast<std::chrono::seconds>(timeline.Position()).count();
+            jPosition = std::chrono::duration_cast<std::chrono::milliseconds>(timeline.Position()).count();
         }
-        jlong jDuration = std::chrono::duration_cast<std::chrono::seconds>(timeline.EndTime() - timeline.StartTime()).count();
+        if (jPosition < 0) {
+            jPosition = 0;
+        }
+        jlong jDuration = std::chrono::duration_cast<std::chrono::milliseconds>(timeline.EndTime() - timeline.StartTime()).count();
+        if (jDuration < 0) {
+            jDuration = 0;
+        }
 
         jobject mediaInfo = env->NewObject(mediaInfoClass, mediaInfoConstructor, jTitle, jArtist, jArtwork, jPosition, jDuration, jPlaying);
 
