@@ -1,0 +1,96 @@
+name: release
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: Version of the release, like 0.1.1
+        required: true
+        type: string
+
+permissions:
+  contents: write
+
+jobs:
+  native:
+    runs-on: windows-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: 17
+      - name: Setup MSVC
+        uses: ilammy/msvc-dev-cmd@v1
+      - name: Install ninja
+        run: choco install ninja -y --no-progress
+      - name: Build native library
+        run: |
+          cmake -S . -B build-win -G Ninja -D CMAKE_BUILD_TYPE=Release
+          cmake --build build-win --target MediaPlayerInfo
+      - name: Upload native library
+        uses: actions/upload-artifact@v4
+        with:
+          name: native-windows
+          path: build-win/MediaPlayerInfo.dll
+          if-no-files-found: error
+  build:
+    runs-on: ubuntu-latest
+    needs:
+      - native
+    env:
+      CI_VERSION: ${{ inputs.version }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: 17
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v3
+      - name: Download native library
+        uses: actions/download-artifact@v4
+        with:
+          name: native-windows
+          path: build-win
+      - name: Copy dll to resources
+        run: cp build-win/MediaPlayerInfo.dll src/main/resources/mediaplayerinfo/natives/win/
+      - name: Build with Gradle
+        run: ./gradlew clean assemble
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: maven-artifacts
+          path: build/libs/*
+      - name: Create GitHub Release
+        uses: "actions/github-script@v6"
+        with:
+          github-token: "${{ secrets.GITHUB_TOKEN }}"
+          script: |
+            const fs = require('fs');
+            try {
+              const response = await github.rest.repos.createRelease({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                tag_name: 'v${{ inputs.version }}',
+                name: 'MediaPlayerInfo ${{ inputs.version }}',
+                generate_release_notes: true,
+                draft: false,
+              });
+
+              for (const file of fs.readdirSync('build/libs')) {
+                await github.rest.repos.uploadReleaseAsset({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  release_id: response.data.id,
+                  name: file,
+                  data: fs.readFileSync('build/libs/' + file)
+                });
+              }
+            } catch (error) {
+              core.setFailed(error.message);
+            }

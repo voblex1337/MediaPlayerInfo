@@ -9,10 +9,12 @@ plugins {
 
 val nightlyCommitHash = System.getenv("NIGHTLY_COMMIT")
 val preRelease = System.getenv("CI_PRERELEASE")
+val releaseVersion = System.getenv("CI_VERSION")
 
 group = "dev.redstones.mediaplayerinfo"
 
-version = "0.1.0${if (preRelease != null) "-${preRelease}" else ""}${if (nightlyCommitHash != null) "+${nightlyCommitHash}" else ""}"
+version = releaseVersion
+    ?: "0.1.0${if (preRelease != null) "-${preRelease}" else ""}${if (nightlyCommitHash != null) "+${nightlyCommitHash}" else ""}"
 
 repositories {
     mavenCentral()
